@@ -1,0 +1,117 @@
+Query 1
+
+SELECT
+    DATE_PARSE("Date", '%m-%d-%y') AS sale_date,
+    SUM("Amount") AS daily_sales,
+    SUM(SUM("Amount")) OVER (
+        ORDER BY DATE_PARSE("Date", '%m-%d-%y')
+        ROWS UNBOUNDED PRECEDING
+    ) AS cumulative_sales
+FROM
+    raw
+WHERE
+    -- Filter for the specific year 2022
+    DATE_PARSE("Date", '%m-%d-%y') BETWEEN DATE '2022-01-01' AND DATE '2022-12-31'
+    AND Status LIKE 'Ship%' -- Filter for 'Shipped' statuses
+GROUP BY
+    1
+ORDER BY
+    1
+LIMIT 10
+
+------------------------------------------------------------------------------------------
+
+Query 2
+
+SELECT
+    "ship-state" AS state_name,
+    SUM("Amount") AS total_sales
+FROM
+    raw
+WHERE
+    "Amount" IS NOT NULL
+    AND "Status" LIKE 'Ship%' -- Filter for completed orders
+    AND "ship-state" IS NOT NULL
+GROUP BY
+    "ship-state"
+ORDER BY
+    total_sales ASC -- ASC for lowest sales
+LIMIT 10
+
+------------------------------------------------------------------------------------------
+
+Query 3
+
+SELECT
+    Category,
+    AVG("Amount") AS average_sales_amount,
+    COUNT(*) AS total_transactions
+FROM
+    raw
+WHERE
+    "Amount" IS NOT NULL
+    AND "Status" LIKE 'Ship%' -- Filter for completed orders
+GROUP BY
+    Category
+ORDER BY
+    average_sales_amount DESC
+LIMIT 10
+
+------------------------------------------------------------------------------------------
+
+Query 4
+
+WITH RankedProducts AS (
+    SELECT
+        Category,
+        Style AS product_style,
+        SUM("Amount") AS total_sales,
+        ROW_NUMBER() OVER (
+            PARTITION BY Category
+            ORDER BY SUM("Amount") DESC
+        ) AS rank_in_category
+    FROM
+        raw
+    WHERE
+        "Amount" IS NOT NULL
+        AND "Status" LIKE 'Ship%' -- Filter for completed orders
+    GROUP BY
+        1, 2
+)
+SELECT
+    Category,
+    product_style,
+    total_sales
+FROM
+    RankedProducts
+WHERE
+    rank_in_category <= 3
+ORDER BY
+    Category, total_sales DESC
+LIMIT 10
+
+------------------------------------------------------------------------------------------
+
+Query 5
+
+WITH MonthlyData AS (
+    SELECT
+        DATE_TRUNC('month', DATE_PARSE("Date", '%m-%d-%y')) AS sales_month,
+        SUM("Amount") AS monthly_sales
+    FROM
+        raw
+    WHERE
+        "Amount" IS NOT NULL
+        AND "Status" LIKE 'Ship%' -- Filter for completed orders
+    GROUP BY
+        1
+)
+SELECT
+    sales_month,
+    monthly_sales,
+    (monthly_sales - LAG(monthly_sales, 1) OVER (ORDER BY sales_month)) / LAG(monthly_sales, 1) OVER (ORDER BY sales_month) AS sales_growth_rate
+FROM
+    MonthlyData
+ORDER BY
+    sales_month
+LIMIT 10
